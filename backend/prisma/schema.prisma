@@ -1,0 +1,57 @@
+// Schema do Prisma — camada de models
+// Ver docs/plano-desenvolvimento.md (seções 3 e 4)
+//
+// Nesta fase só modelamos User, Subject e Video.
+// Exercise e Submission foram adiados (ver seção 8.2 do plano) e serão
+// adicionados quando a estrutura de exercícios/pontuação for decidida.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Único papel de usuário existente por enquanto: aluno (ver seção 8.3 do plano).
+model User {
+  id        String   @id @default(cuid())
+  nome      String
+  email     String   @unique
+  senha     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+/// Matéria (Física ou Matemática) à qual vídeos e exercícios pertencem.
+model Subject {
+  id        String   @id @default(cuid())
+  nome      String
+  descricao String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  videos Video[]
+
+  @@map("subjects")
+}
+
+/// Vídeo hospedado no YouTube (não-listado). Guardamos apenas o `videoId`,
+/// nunca o arquivo em si (ver seção 5.1/8.1 do plano).
+model Video {
+  id        String   @id @default(cuid())
+  titulo    String
+  descricao String?
+  videoId   String
+  topico    String?
+  ordem     Int?
+  subjectId String
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("videos")
+}
