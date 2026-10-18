@@ -1,15 +1,13 @@
 import prisma from "../config/prismaClient.js";
 
-// Único papel de usuário existente por enquanto: aluno (ver seção 8.3 do plano).
-
-export function createUser({ nome, email, senha }) {
+export function createUser({ nome, usuario, senha, papel = "ALUNO" }) {
   return prisma.user.create({
-    data: { nome, email, senha },
+    data: { nome, usuario, senha, papel },
   });
 }
 
-export function findUserByEmail(email) {
-  return prisma.user.findUnique({ where: { email } });
+export function findUserByUsuario(usuario) {
+  return prisma.user.findUnique({ where: { usuario } });
 }
 
 export function findUserById(id) {

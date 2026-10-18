@@ -1,7 +1,18 @@
 import prisma from "../config/prismaClient.js";
 
 export function findAllSubjects() {
-  return prisma.subject.findMany();
+  return prisma.subject.findMany({
+    orderBy: { ordem: "asc" },
+    select: {
+      id: true,
+      nome: true,
+      ordem: true,
+      topics: {
+        orderBy: { ordem: "asc" },
+        select: { id: true, nome: true, ordem: true },
+      },
+    },
+  });
 }
 
 export function findSubjectById(id) {

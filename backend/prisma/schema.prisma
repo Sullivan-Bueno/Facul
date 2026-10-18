@@ -1,42 +1,85 @@
 // Schema do Prisma — camada de models
-// Ver docs/plano-desenvolvimento.md (seções 3 e 4)
-//
-// Nesta fase só modelamos User, Subject e Video.
-// Exercise e Submission foram adiados (ver seção 8.2 do plano) e serão
-// adicionados quando a estrutura de exercícios/pontuação for decidida.
+// User, Subject, Video, e o questionário com as tentativas do aluno.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
-/// Único papel de usuário existente por enquanto: aluno (ver seção 8.3 do plano).
+enum Papel {
+  ALUNO
+  ADMIN
+}
+
+/// Aluno estuda e faz prova. Admin vê o painel e cria usuários.
 model User {
   id        String   @id @default(cuid())
   nome      String
-  email     String   @unique
+  usuario   String   @unique
   senha     String
+  papel     Papel    @default(ALUNO)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  attempts Attempt[]
 
   @@map("users")
 }
 
-/// Matéria (Física ou Matemática) à qual vídeos e exercícios pertencem.
+/// Módulo de estudo (Matemática ou Física). Os conteúdos ficam em Topic.
 model Subject {
   id        String   @id @default(cuid())
   nome      String
   descricao String?
+  ordem     Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  topics Topic[]
   videos Video[]
 
   @@map("subjects")
+}
+
+/// Conteúdo de um módulo, na ordem em que aparece para o aluno.
+model Topic {
+  id        String   @id @default(cuid())
+  nome      String
+  ordem     Int
+  subjectId String
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  materials Material[]
+  quiz      Quiz?
+
+  @@map("topics")
+}
+
+enum MaterialTipo {
+  RESUMO
+  INFOGRAFICO
+  YOUTUBE
+}
+
+/// Material de um conteúdo. PDF e imagem ficam no servidor; o vídeo é só o link do YouTube.
+model Material {
+  id        String       @id @default(cuid())
+  tipo      MaterialTipo
+  titulo    String
+  url       String?
+  ordem     Int
+  topicId   String
+  topic     Topic        @relation(fields: [topicId], references: [id])
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@map("materials")
 }
 
 /// Vídeo hospedado no YouTube (não-listado). Guardamos apenas o `videoId`,
@@ -54,4 +97,76 @@ model Video {
   updatedAt DateTime @updatedAt
 
   @@map("videos")
+}
+
+/// Questionário. O de conhecimentos gerais não tem conteúdo; os exercícios de cada tópico apontam para Topic.
+model Quiz {
+  id        String   @id @default(cuid())
+  titulo    String
+  descricao String?
+  topicId   String?  @unique
+  topic     Topic?   @relation(fields: [topicId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  questions Question[]
+  attempts  Attempt[]
+
+  @@map("quizzes")
+}
+
+model Question {
+  id        String   @id @default(cuid())
+  enunciado String   @db.Text
+  ordem     Int
+  quizId    String
+  quiz      Quiz     @relation(fields: [quizId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  options Option[]
+  answers Answer[]
+
+  @@map("questions")
+}
+
+model Option {
+  id         String   @id @default(cuid())
+  texto      String   @db.Text
+  correta    Boolean  @default(false)
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+
+  answers Answer[]
+
+  @@map("options")
+}
+
+/// Uma prova concluída por um aluno. A nota e a data servem ao dashboard.
+model Attempt {
+  id        String   @id @default(cuid())
+  nota      Int
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  quizId    String
+  quiz      Quiz     @relation(fields: [quizId], references: [id])
+  createdAt DateTime @default(now())
+
+  answers Answer[]
+
+  @@map("attempts")
+}
+
+/// Resposta de uma questão dentro da tentativa. Questão em branco fica com optionId nulo.
+model Answer {
+  id         String   @id @default(cuid())
+  correta    Boolean
+  attemptId  String
+  attempt    Attempt  @relation(fields: [attemptId], references: [id])
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+  optionId   String?
+  option     Option?  @relation(fields: [optionId], references: [id])
+
+  @@map("answers")
 }

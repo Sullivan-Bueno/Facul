@@ -8,7 +8,7 @@ const Login = () => {
   const navigate = useNavigate();
   const [, setCookie] = useCookies(["token"]);
 
-  const [email, setEmail] = useState("");
+  const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");
 
   async function handleSubmit(e) {
@@ -16,14 +16,14 @@ const Login = () => {
 
     try {
       const response = await axios.post("http://localhost:3000/user/auth", {
-        email,
+        usuario,
         password,
       });
 
       setCookie("token", response.data.token);
-      navigate("/");
+      navigate(response.data.papel === "ADMIN" ? "/dashboard" : "/estudos");
     } catch (err) {
-      alert("Email ou senha inválidos");
+      alert("Usuário ou senha inválidos");
       console.error(err);
     }
   }
@@ -128,16 +128,15 @@ const Login = () => {
 
           {/* Form */}
           <form className="mt-10 flex flex-col gap-6" onSubmit={handleSubmit}>
-            {/* Email */}
             <Input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              id={"email"}
-              type={"email"}
-              autoComplete={"email"}
-              placeholder={"voce@exemplo.com"}
+              value={usuario}
+              onChange={(e) => setUsuario(e.target.value)}
+              id={"usuario"}
+              type={"text"}
+              autoComplete={"username"}
+              placeholder={"seu.usuario"}
             >
-              Email
+              Usuário
             </Input>
 
             {/* Senha */}

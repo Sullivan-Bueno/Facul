@@ -1,22 +1,35 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { ArrowLeft, ArrowRight, Check, CircleCheck } from "lucide-react";
+import { useCookies } from "react-cookie";
+import { ArrowLeft, ArrowRight, Check, CircleCheck, CircleX } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
+import { conteudoFoiVisto } from "../lib/conteudoVisto";
 
 const Test = () => {
   const { id } = useParams();
+  const [cookies] = useCookies(["token"]);
   const [questions, setQuestions] = useState([]);
+  const [quiz, setQuiz] = useState(null);
   const [answers, setAnswers] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [needsContent, setNeedsContent] = useState(false);
+  const [result, setResult] = useState(null);
+  const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
     async function fetchQuestions() {
+      setIsLoading(true);
+      setError(false);
       try {
-        const response = await axios.get(`http://localhost:3000/exercises/`);
-        setQuestions(response.data.questions);
+        const response = await axios.get(`http://localhost:3000/exercises/${id}`);
+        const topicId = response.data.topicId;
+        const blocked = Boolean(topicId) && !conteudoFoiVisto(topicId);
+        setNeedsContent(blocked);
+        setQuestions(blocked ? [] : response.data.questions);
+        setQuiz({ titulo: response.data.titulo, topicId });
       } catch {
         setError(true);
       } finally {
@@ -25,7 +38,7 @@ const Test = () => {
     }
 
     fetchQuestions();
-  }, []);
+  }, [id]);
 
   const currentQuestion = questions[currentIndex];
   const answeredCount = Object.keys(answers).length;
@@ -40,14 +53,13 @@ const Test = () => {
     }));
   }
 
-  async function sendAnswers(answers) {
+  async function sendAnswers(currentAnswers) {
     const response = await axios.post(
       "http://localhost:3000/exercises/checkanswers",
-      {
-        answers,
-      },
+      { quizId: id, answers: currentAnswers },
+      { headers: { Authorization: `Bearer ${cookies.token}` } },
     );
-    console.log(response.data);
+    return response.data;
   }
 
   return (
@@ -55,8 +67,8 @@ const Test = () => {
       <header className="sticky top-0 z-20 border-b border-[#e5e5e5] bg-white">
         <div className="mx-auto flex h-18 max-w-7xl items-center justify-between px-6 sm:px-10">
           <Link
-            to="/"
-            aria-label="Voltar ao início"
+            to={quiz?.topicId ? `/topicos/${quiz.topicId}` : "/estudos"}
+            aria-label="Voltar ao conteúdo"
             className="flex items-center gap-2"
           >
             <img src="/Icon.png" width={42} height={42} alt="" />
@@ -65,7 +77,7 @@ const Test = () => {
             </span>
           </Link>
           <Link
-            to="/"
+            to={quiz?.topicId ? `/topicos/${quiz.topicId}` : "/estudos"}
             className="flex items-center gap-2 text-sm font-bold text-[#666] transition hover:text-[#303030]"
           >
             <ArrowLeft aria-hidden="true" className="h-4 w-4" />
@@ -81,10 +93,12 @@ const Test = () => {
             Avaliação online
           </p>
           <h1 className="text-3xl font-black tracking-tight sm:text-4xl">
-            Prova de conhecimentos gerais
+            {quiz?.titulo ?? "Exercícios"}
           </h1>
           <p className="mt-3 max-w-2xl leading-6 text-[#777]">
-            Responda às questões e acompanhe seu progresso durante a prova.
+            {isSubmitted
+              ? "Confira o que você marcou e o gabarito de cada questão."
+              : "Responda às questões e acompanhe seu progresso durante a prova."}
           </p>
         </div>
 
@@ -102,29 +116,69 @@ const Test = () => {
               Verifique sua conexão e tente novamente.
             </p>
           </div>
+        ) : needsContent ? (
+          <section className="mx-auto max-w-2xl border-y border-[#e5e5e5] bg-white px-6 py-12 text-center sm:px-12">
+            <h2 className="text-2xl font-black">Veja o conteúdo antes da prova</h2>
+            <p className="mx-auto mt-3 max-w-md leading-6 text-[#777]">
+              Abra o material deste tópico. A prova libera em seguida.
+            </p>
+            <Link
+              to={`/topicos/${quiz.topicId}`}
+              className="mt-8 inline-flex h-12 items-center justify-center bg-[#303030] px-5 font-bold text-white"
+            >
+              Ir para o conteúdo
+            </Link>
+          </section>
         ) : questions.length === 0 ? (
           <div className="border-y border-[#e5e5e5] bg-white px-6 py-12 text-center text-[#777]">
             Nenhuma questão disponível no momento.
           </div>
         ) : isSubmitted ? (
-          <section className="mx-auto max-w-2xl border-y border-[#e5e5e5] bg-white px-6 py-12 text-center sm:px-12">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center bg-[#fff8d6] text-[#9a7b00]">
-              <CircleCheck aria-hidden="true" className="h-8 w-8" />
+          <section className="mx-auto max-w-3xl">
+            <div className="border-y border-[#e5e5e5] bg-white px-6 py-10 text-center sm:px-12">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center bg-[#fff8d6] text-[#9a7b00]">
+                <CircleCheck aria-hidden="true" className="h-8 w-8" />
+              </div>
+              <p className="mt-6 text-xs font-bold uppercase tracking-[0.2em] text-[#9a7b00]">
+                Prova concluída
+              </p>
+              <h2 className="mt-2 text-3xl font-black">Revisão da prova</h2>
+              <p className="mt-3 text-[#777]">
+                Você acertou {result?.nota ?? 0} de {questions.length} questões.
+              </p>
             </div>
-            <p className="mt-6 text-xs font-bold uppercase tracking-[0.2em] text-[#9a7b00]">
-              Prova concluída
-            </p>
-            <h2 className="mt-2 text-3xl font-black">Respostas registradas</h2>
-            <p className="mt-3 text-[#777]">
-              Você respondeu {answeredCount} de {questions.length} questões.
-            </p>
-            <button
-              type="button"
-              onClick={() => setIsSubmitted(false)}
-              className="mt-8 inline-flex h-12 items-center justify-center gap-2 bg-[#303030] px-5 font-bold text-white transition hover:bg-[#1f1f1f] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4c400]"
-            >
-              Revisar respostas
-            </button>
+            <ol className="mt-4 grid gap-4">
+              {(result?.revisao ?? []).map((item) => (
+                <li key={item.ordem} className="border border-[#e5e5e5] bg-white p-5 sm:p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#777]">
+                      Questão {item.ordem}
+                    </p>
+                    <span
+                      className={`inline-flex items-center gap-1.5 text-xs font-bold ${
+                        item.correta ? "text-[#517337]" : "text-[#9a3b3b]"
+                      }`}
+                    >
+                      {item.correta ? (
+                        <CircleCheck aria-hidden="true" className="h-4 w-4" />
+                      ) : (
+                        <CircleX aria-hidden="true" className="h-4 w-4" />
+                      )}
+                      {item.correta ? "Correta" : "Incorreta"}
+                    </span>
+                  </div>
+                  <p className="mt-3 font-bold leading-7">{item.enunciado}</p>
+                  <p className="mt-4 text-sm leading-6">
+                    <span className="font-bold">Sua resposta: </span>
+                    {item.resposta ?? "Em branco"}
+                  </p>
+                  <p className="mt-1 text-sm leading-6">
+                    <span className="font-bold">Gabarito: </span>
+                    {item.gabarito}
+                  </p>
+                </li>
+              ))}
+            </ol>
           </section>
         ) : (
           <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
@@ -282,11 +336,27 @@ const Test = () => {
                 </span>
               </div>
 
+              {submitError && (
+                <p role="alert" className="mt-6 text-sm font-bold text-[#9a3b3b]">
+                  {submitError}
+                </p>
+              )}
+
               <button
                 type="button"
-                onClick={() => {
-                  setIsSubmitted(true);
-                  sendAnswers(answers);
+                onClick={async () => {
+                  setSubmitError("");
+                  try {
+                    const data = await sendAnswers(answers);
+                    setResult(data);
+                    setIsSubmitted(true);
+                  } catch (err) {
+                    setSubmitError(
+                      err.response?.status === 401
+                        ? "Entre na sua conta antes de concluir a prova."
+                        : "Não foi possível registrar as respostas.",
+                    );
+                  }
                 }}
                 className="mt-7 flex h-12 w-full items-center justify-center gap-2 border border-[#303030] px-4 text-sm font-bold transition hover:bg-[#303030] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4c400]"
               >

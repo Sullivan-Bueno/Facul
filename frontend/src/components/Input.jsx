@@ -1,7 +1,7 @@
 const Input = (props) => {
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor="email" className="text-sm font-bold text-[#303030]">
+      <label htmlFor={props.id} className="text-sm font-bold text-[#303030]">
         {props.children}
       </label>
 

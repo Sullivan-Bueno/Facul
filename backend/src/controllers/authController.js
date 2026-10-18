@@ -1,22 +1,38 @@
 import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
-
-dotenv.config({ quiet: true, path: "../.env" });
+import { createUser, findUserByUsuario } from "../models/userModel.js";
 
 export async function authUser(req, res) {
-  const { email, password } = req.body;
+  const usuario = req.body.usuario?.trim().toLowerCase();
+  const { password } = req.body;
+  const user = usuario ? await findUserByUsuario(usuario) : null;
 
-  const userId = "9187398";
-  const userEmail = "teste@email.com";
-  const userPassword = "123123123";
-
-  if (email == userEmail && password == userPassword) {
-    const token = jwt.sign({ userId: userId }, process.env.JWT_SECRET, {
-      expiresIn: "1h",
-    });
-
-    return res.status(200).json({ token });
-  } else {
-    return res.status(401).json({ message: "Email ou senha incorretos" });
+  if (!user || user.senha !== password) {
+    return res.status(401).json({ message: "Usuário ou senha incorretos" });
   }
+
+  const token = jwt.sign(
+    { userId: user.id, papel: user.papel },
+    process.env.JWT_SECRET,
+    { expiresIn: "1h" },
+  );
+
+  return res.status(200).json({ token, papel: user.papel });
+}
+
+export async function createStudent(req, res) {
+  const nome = req.body.nome?.trim();
+  const usuario = req.body.usuario?.trim().toLowerCase();
+  const senha = req.body.senha;
+
+  if (!nome || !usuario || !senha) {
+    return res.status(400).json({ message: "Preencha nome, usuário e senha" });
+  }
+
+  const existing = await findUserByUsuario(usuario);
+  if (existing) {
+    return res.status(409).json({ message: "Este usuário já está em uso" });
+  }
+
+  const user = await createUser({ nome, usuario, senha, papel: "ALUNO" });
+  return res.status(201).json({ id: user.id, nome: user.nome, usuario: user.usuario });
 }

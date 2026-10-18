@@ -9,6 +9,9 @@
     "prisma": "^6.19.3"
   },
   "type": "module",
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
   "allowScripts": {
     "@prisma/client@6.19.3": true,
     "prisma@6.19.3": true,

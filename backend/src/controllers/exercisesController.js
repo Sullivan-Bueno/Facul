@@ -1,36 +1,100 @@
-import quiz from "../../Quiz.js";
+import {
+  createAttempt,
+  findQuizById,
+  findQuizWithQuestions,
+} from "../models/quizModel.js";
 
-export function getExercises(req, res) {
-  const questions = quiz.quiz.questions.map(({ id, question, options }) => ({
-    id,
-    question,
-    options,
+function toPublicQuestions(quiz) {
+  return (quiz?.questions ?? []).map((question) => ({
+    id: question.id,
+    question: question.enunciado,
+    options: question.options.map((option) => ({
+      id: option.id,
+      text: option.texto,
+    })),
   }));
+}
 
+export async function getExercises(req, res) {
   try {
-    res.status(200).json({ questions });
+    const quiz = await findQuizWithQuestions();
+    res.status(200).json({ questions: toPublicQuestions(quiz) });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 }
 
-export function checkAnswers(req, res) {
-  const userAnswers = req.body.answers;
-  const correctAnswers = Object.fromEntries(
-    quiz.quiz.questions.map(({ id, correctOptionId }) => [id, correctOptionId]),
-  );
-
-  let nota = 0;
-
-  for (let i = 0; i < 10; i++) {
-    if (userAnswers[i] == correctAnswers[i]) {
-      nota += 1;
-    }
-  }
-
+export async function getExercisesById(req, res) {
   try {
-    res.status(200).json({ questoesCorretas: nota, nota });
+    const quiz = await findQuizById(req.params.id);
+
+    if (!quiz) {
+      return res.status(404).json({ message: "Questionário não encontrado" });
+    }
+
+    res.status(200).json({
+      id: quiz.id,
+      titulo: quiz.titulo,
+      topicId: quiz.topicId,
+      questions: toPublicQuestions(quiz),
+    });
   } catch (err) {
-    res.status(400).json({ message: `${err.message}` });
+    res.status(400).json({ message: err.message });
+  }
+}
+
+export async function checkAnswers(req, res) {
+  try {
+    const userAnswers = req.body.answers ?? {};
+    const quiz = req.body.quizId
+      ? await findQuizById(req.body.quizId)
+      : await findQuizWithQuestions();
+
+    if (!quiz) {
+      return res.status(404).json({ message: "Questionário não encontrado" });
+    }
+
+    const answers = quiz.questions.map((question) => {
+      const selected = question.options.find(
+        (option) => option.id === userAnswers[question.id],
+      );
+
+      return {
+        questionId: question.id,
+        optionId: selected?.id ?? null,
+        correta: Boolean(selected?.correta),
+      };
+    });
+
+    const nota = answers.filter((answer) => answer.correta).length;
+    const revisao = quiz.questions.map((question, index) => {
+      const selected = question.options.find(
+        (option) => option.id === userAnswers[question.id],
+      );
+      const gabarito = question.options.find((option) => option.correta);
+      const letra = (option) => {
+        const optionIndex = question.options.findIndex((item) => item.id === option?.id);
+        return optionIndex >= 0 ? String.fromCharCode(65 + optionIndex) : "";
+      };
+
+      return {
+        ordem: index + 1,
+        enunciado: question.enunciado,
+        resposta: selected ? `${letra(selected)}) ${selected.texto}` : null,
+        gabarito: gabarito ? `${letra(gabarito)}) ${gabarito.texto}` : null,
+        correta: Boolean(selected?.correta),
+      };
+    });
+
+    await createAttempt({
+      userId: req.userId,
+      quizId: quiz.id,
+      nota,
+      answers,
+    });
+
+    res.status(200).json({ questoesCorretas: nota, nota, revisao });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
   }
 }
